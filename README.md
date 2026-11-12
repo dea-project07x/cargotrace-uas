@@ -1,66 +1,185 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# CargoTrace
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Global shipment visibility and tracking platform built with Laravel and MySQL.
+Final project (UAS) for Web Programming 2.
 
-## About Laravel
+> **Live demo:** _TODO: add URL after deployment_
+> **Demo accounts:** see [Demo accounts](#demo-accounts)
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Problem
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+Shipment information is scattered, customers cannot see the latest status or travel history, delays and
+exceptions are not visible in one place, and operators lack a dashboard to prioritize follow-up.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Solution
 
-## Learning Laravel
+CargoTrace lets logistics operators manage shipments, carriers, locations and tracking events, lets customers
+follow their own shipments on a timeline and map, detects delays with deterministic rules, and tracks
+exceptions such as customs holds.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## Features
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+- Role-based access control: **Administrator**, **Logistics Operator**, **Customer** (authorization enforced on the server)
+- Shipment lifecycle with validated status transitions
+  `CREATED → BOOKED → PICKED_UP → IN_TRANSIT → DELIVERED` (and `CANCELLED` from early stages)
+- Append-only tracking events with chronological timeline and current location
+- ETA and delay detection with configurable severity thresholds
+- Exception management (`CUSTOMS_HOLD`, `WEATHER_DELAY`, `PORT_CONGESTION`, `DAMAGED`, `MISROUTED`, `DOCUMENTATION_ISSUE`)
+  with `OPEN → INVESTIGATING → RESOLVED` workflow
+- REST API secured with Laravel Sanctum
+- In-app notifications and audit log
+- Search, filter, sorting and server-side pagination
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+_Planned / in progress: web UI, Leaflet map, dashboard charts, external API integration (geocoding/weather)._
 
-## Laravel Sponsors
+## Business rules
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+**Status transitions** are defined once in `App\Enums\ShipmentStatus` and enforced in
+`ShipmentService::changeStatus()`. Terminal states (`DELIVERED`, `CANCELLED`) cannot be left.
 
-### Premium Partners
+**Delay rule** (`App\Services\DelayCalculator`):
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+```
+delay = estimated arrival - expected arrival
+delay <= grace period                 -> on time
+delay <= DELAY_LOW_MAX_HOURS          -> LOW
+delay <= DELAY_MEDIUM_MAX_HOURS       -> MEDIUM
+otherwise                             -> HIGH
+```
 
-## Contributing
+Defaults: LOW up to 6 h, MEDIUM up to 24 h, HIGH above 24 h. Delivered shipments are judged on the actual delivery time.
+The reason and the values used are stored in `shipments.delay_reason`.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## Tech stack
 
-## Code of Conduct
+PHP 8.3, Laravel 12, MySQL 8, Eloquent ORM, Laravel Sanctum, PHPUnit.
+Planned: Blade, Tailwind CSS, Vanilla JS (Fetch API), Leaflet + OpenStreetMap, Chart.js.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## Architecture
 
-## Security Vulnerabilities
+```
+Routes + Middleware -> Controllers -> Service Layer -> Models (Eloquent) -> MySQL
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+| Layer | Location | Responsibility |
+|---|---|---|
+| Controllers | `app/Http/Controllers/Api` | HTTP only: validate, authorize, call services, shape responses |
+| Form Requests | `app/Http/Requests` | Input validation and request-level authorization |
+| Services | `app/Services` | Business rules and database transactions |
+| Policies / Gates | `app/Policies`, `AppServiceProvider` | Authorization rules |
+| Models / Enums | `app/Models`, `app/Enums` | Relationships and status transition map |
+
+## Getting started
+
+Requirements: PHP 8.3+, Composer, MySQL 8+, Git.
+
+```bash
+git clone <repository-url> cargotrace
+cd cargotrace
+composer install
+cp .env.example .env
+php artisan key:generate
+```
+
+Create an empty MySQL database and set it in `.env`:
+
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=cargotrace
+DB_USERNAME=root
+DB_PASSWORD=
+
+# Group-specific delay parameters
+DELAY_LOW_MAX_HOURS=6
+DELAY_MEDIUM_MAX_HOURS=24
+DELAY_GRACE_MINUTES=0
+```
+
+Run migrations and seed demo data, then start the server:
+
+```bash
+php artisan migrate --seed
+php artisan serve
+```
+
+### Demo accounts
+
+Password for all accounts: `password`
+
+| Role | Email |
+|---|---|
+| Administrator | admin@cargotrace.test |
+| Logistics Operator | operator@cargotrace.test |
+| Customer | customer1@cargotrace.test |
+| Customer | customer2@cargotrace.test |
+
+Demo data is synthetic. It is generated through the same services the API uses, so statuses, delays,
+notifications and audit logs are consistent.
+
+## REST API
+
+All endpoints return JSON. Authenticate with a Sanctum bearer token obtained from `POST /api/login`
+and send `Accept: application/json`.
+
+| Method | Endpoint | Description | Access |
+|---|---|---|---|
+| POST | `/api/register` | Register (always creates a Customer) | Public |
+| POST | `/api/login` | Get an API token | Public |
+| POST | `/api/logout` | Revoke the current token | Authenticated |
+| GET | `/api/user` | Current user | Authenticated |
+| GET | `/api/shipments` | List (filter, sort, paginate) | Authenticated (customers see only their own) |
+| POST | `/api/shipments` | Create a shipment | Admin, Operator |
+| GET | `/api/shipments/{id}` | Shipment details | Owner, Admin, Operator |
+| PUT/PATCH | `/api/shipments/{id}` | Update shipment data | Admin, Operator (non-terminal) |
+| DELETE | `/api/shipments/{id}` | Delete (only `CREATED`/`CANCELLED`) | Admin |
+| GET | `/api/shipments/{id}/tracking` | Timeline and current location | Owner, Admin, Operator |
+| POST | `/api/shipments/{id}/tracking` | Add a tracking event / change status | Admin, Operator |
+| GET | `/api/shipments/{id}/exceptions` | List exceptions | Owner, Admin, Operator |
+| POST | `/api/shipments/{id}/exceptions` | Open an exception | Admin, Operator |
+| PATCH | `/api/exceptions/{id}` | Update exception status | Admin, Operator |
+| GET/POST | `/api/carriers` | List / create carriers | Read: Admin, Operator. Create: Admin |
+| GET/POST | `/api/locations` | List / create locations | Read: Admin, Operator. Create: Admin |
+
+List filters for `GET /api/shipments`: `search`, `status`, `carrier_id`, `origin_id`, `destination_id`,
+`from`, `to`, `delayed` (`1`/`0`), `sort`, `direction`, `per_page`.
+
+Status codes: `200`/`201`/`204` success, `401` unauthenticated, `403` forbidden, `404` not found,
+`422` validation or invalid transition. Errors never expose stack traces.
+
+_TODO: add the Postman collection to `docs/`._
+
+## Testing
+
+```bash
+php artisan test
+```
+
+Tests use an in-memory SQLite database. They cover authentication, shipment CRUD with validation and
+authorization, status transitions, tracking rules, delay rules and exception workflow.
+
+## Security
+
+- Passwords hashed (bcrypt); Sanctum token authentication
+- Authorization enforced on the server with Policies and Gates (not only hidden buttons)
+- Form Request validation; mass-assignment protection (`role`, `status` and delay fields are not fillable)
+- Eloquent query builder (SQL injection safe); CSRF and XSS protection for web pages
+- `.env` and API keys are never committed
+
+## Documentation
+
+_TODO: ERD, data dictionary and architecture diagram in `docs/`._
+
+## Known limitations and future work
+
+- _TODO: fill in before submission._
+
+## Attribution
+
+- [Laravel](https://laravel.com) (MIT) and [Laravel Sanctum](https://laravel.com/docs/sanctum) (MIT)
+- _TODO: Leaflet, OpenStreetMap, Chart.js, Tailwind CSS and any external code used._
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Academic project for Web Programming 2.
