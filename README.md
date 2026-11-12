@@ -61,6 +61,8 @@ Planned: Blade, Tailwind CSS, Vanilla JS (Fetch API), Leaflet + OpenStreetMap, C
 Routes + Middleware -> Controllers -> Service Layer -> Models (Eloquent) -> MySQL
 ```
 
+Diagram: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 | Layer | Location | Responsibility |
 |---|---|---|
 | Controllers | `app/Http/Controllers/Api` | HTTP only: validate, authorize, call services, shape responses |
@@ -169,7 +171,26 @@ authorization, status transitions, tracking rules, delay rules and exception wor
 
 ## Documentation
 
-_TODO: ERD, data dictionary and architecture diagram in `docs/`._
+- [Database design: ERD and data dictionary](docs/ERD.md)
+- [Architecture and lifecycle diagrams](docs/ARCHITECTURE.md)
+- _TODO: Postman collection in `docs/`._
+
+### Entity Relationship Diagram (overview)
+
+```mermaid
+erDiagram
+    USERS ||--o{ SHIPMENTS : "owns / creates"
+    CARRIERS ||--o{ SHIPMENTS : transports
+    LOCATIONS ||--o{ SHIPMENTS : "origin / destination"
+    SHIPMENTS ||--o{ SHIPMENT_ITEMS : contains
+    SHIPMENTS ||--o{ TRACKING_EVENTS : "has timeline"
+    SHIPMENTS ||--o{ SHIPMENT_EXCEPTIONS : "has issues"
+    LOCATIONS ||--o{ TRACKING_EVENTS : "recorded at"
+    USERS ||--o{ AUDIT_LOGS : performs
+    USERS ||--o{ NOTIFICATIONS : receives
+```
+
+Full column-level diagram: [docs/ERD.md](docs/ERD.md).
 
 ## Known limitations and future work
 
